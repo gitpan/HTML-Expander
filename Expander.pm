@@ -12,7 +12,7 @@ package HTML::Expander;
 use Exporter;
 @ISA     = qw( Exporter );
 
-our $VERSION  = '2.2';
+our $VERSION  = '2.3';
 
 use Carp;
 use strict;
@@ -106,12 +106,12 @@ sub expand
   my $text  = shift;
   my $level = shift;
   
-  # print "DEBUG: expand ($level) [$text]\n";
+  # print "DEBUG: expand (level=$level) [text=$text]\n";
   
   $text =~ s/\(\%([^\(\)]+)\)/$self->var_expand($1,$level+1)/gie;
   # print "DEBUG: ----------------------\n";
   $text =~ s/<([^<>]+)>/$self->tag_expand($1,$level+1)/gie;
-  # print "DEBUG: expand result: [$text]\n";
+  # print "DEBUG: expand result: [text=$text]\n";
   return $text;
 }
 
@@ -166,7 +166,7 @@ sub tag_expand
     {
     if( $args{ 'set' } eq '' )
       {
-      return $self->var_expand( $args{ 'name' } );
+      return $self->var_expand( $args{ 'name' }, $level + 1 );
       }
     else
       {
@@ -213,12 +213,12 @@ sub tag_expand
     # print "DEBUG: style name {$style}, tag: $tag -> ($value)\n" if defined $value;
     if ( $value and ! $self->{ 'VISITED' }{ "$style::$tag" } )
       {
-      print "DEBUG:               ---> ($value)\n";
+      # print "DEBUG:               ---> ($value)\n";
       $self->{ 'VISITED' }{ "$style::$tag" }++; # avoids recursion
-      $value = $self->expand( $value );
+      $value = $self->expand( $value, $level + 1 );
       $value =~ s/\%([a-z_0-9]+)/$args{ lc $1 }/gi;
       my $ret = $self->expand( $value, $level + 1 );
-      print "DEBUG: tag_expand return: [$ret]\n";
+      # print "DEBUG: tag_expand return: [$ret]\n";
       return $ret;
       }
     else
