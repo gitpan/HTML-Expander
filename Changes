@@ -1,0 +1,6 @@
+Revision history for Perl extension HTML::Expander.
+
+0.01  Sun Nov 11 03:46:59 2001
+	- original version; created by h2xs 1.21 with options
+		-X HTML::Expander
+
