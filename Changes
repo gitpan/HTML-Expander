@@ -1,5 +1,9 @@
 Revision history for Perl extension HTML::Expander.
 
+2.2 Wed Sep 22 00:15:06 EEST 2004
+
+    - fixed (%VAR) interpolation before %arg tag interpolation
+
 0.01  Sun Nov 11 03:46:59 2001
 	- original version; created by h2xs 1.21 with options
 		-X HTML::Expander

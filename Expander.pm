@@ -5,14 +5,14 @@
 # <cade@biscom.net> <cade@datamax.bg> <cade@cpan.org>
 # http://cade.datamax.bg
 # http://play.evrocom.net/cade
-# $Id: Expander.pm,v 1.12 2004/09/18 00:02:13 cade Exp $
+# $Id: Expander.pm,v 1.13 2004/09/21 21:14:45 cade Exp $
 #
 #########################################################################
 package HTML::Expander;
 use Exporter;
 @ISA     = qw( Exporter );
 
-our $VERSION  = '2.1';
+our $VERSION  = '2.2';
 
 use Carp;
 use strict;
@@ -210,14 +210,15 @@ sub tag_expand
     
     my $style = $self->{ 'STYLE' }[0] || 'main';
     my $value = $self->{ 'TAGS' }{ $style }{ $tag };
-    # print "DEBUG: style name {$style}, tag: $tag -> ($value)\n";
+    # print "DEBUG: style name {$style}, tag: $tag -> ($value)\n" if defined $value;
     if ( $value and ! $self->{ 'VISITED' }{ "$style::$tag" } )
       {
+      print "DEBUG:               ---> ($value)\n";
       $self->{ 'VISITED' }{ "$style::$tag" }++; # avoids recursion
+      $value = $self->expand( $value );
       $value =~ s/\%([a-z_0-9]+)/$args{ lc $1 }/gi;
-      # print "DEBUG:               ---> ($value)\n";
       my $ret = $self->expand( $value, $level + 1 );
-      # print "DEBUG: tag_expand return: [$ret]\n";
+      print "DEBUG: tag_expand return: [$ret]\n";
       return $ret;
       }
     else
@@ -387,6 +388,13 @@ HTML::Expanded recursively).
 
 =head1 VARIABLES/ENVIRONMENT
 
+HTML::Expander object have own 'environment' which is accessed this way:
+
+$ex->{'ENV'}{ 'var-name' } = 'var-value';
+
+i.e. $ex->{'ENV'} is hash reference to the local environment. There is no
+special access policy.
+
 There is syntax for variables interpolation. Values are taken either from
 internal environment table or program environment (internal has priority):
 
@@ -409,6 +417,11 @@ If you want to set variable and return its value at the same time you have to
 use unary 'echo' argument:
 
   <var name=VARNAME set=VALUE echo>
+
+(%VAR) variables are interpolated before %arg interpolation, so it is safe to
+use this:
+
+  <img src=(%WWWROOT)/%src>
   
 =head1 BUGS
 
@@ -433,7 +446,7 @@ If you find bug please contact me, thank you.
  
 =head1 VERSION
 
-  $Id: Expander.pm,v 1.12 2004/09/18 00:02:13 cade Exp $
+  $Id: Expander.pm,v 1.13 2004/09/21 21:14:45 cade Exp $
  
 =cut
 
