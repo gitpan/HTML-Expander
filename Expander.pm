@@ -5,14 +5,14 @@
 # <cade@biscom.net> <cade@datamax.bg> <cade@cpan.org>
 # http://cade.datamax.bg
 # http://play.evrocom.net/cade
-# $Id: Expander.pm,v 1.13 2004/09/21 21:14:45 cade Exp $
+# $Id: Expander.pm,v 1.16 2005/11/12 22:15:22 cade Exp $
 #
 #########################################################################
 package HTML::Expander;
 use Exporter;
 @ISA     = qw( Exporter );
 
-our $VERSION  = '2.3';
+our $VERSION  = '2.4';
 
 use Carp;
 use strict;
@@ -27,10 +27,11 @@ sub new
   my $self = {};
   
   $self->{ 'TAGS'     } = {}; # tag tables
+  $self->{ 'VARS'     } = {}; # var tables
   $self->{ 'INC'      } = {}; # include directories
   $self->{ 'ENV'      } = {}; # local environment, this is free for use
   
-  $self->{ 'STYLE'    } = []; # style stack
+  $self->{ 'MODE'     } = []; # mode stack
   $self->{ 'VISITED'  } = {}; # avoids recursion
 
   $self->{ 'WARNINGS' } = 0; # set to 1 for debug
@@ -48,31 +49,47 @@ sub DESTROY
 sub define_tag
 {
   my $self  = shift;
-  my $style = shift;
+  my $mode  = shift;
   my $tag   = shift;
   my $value = shift;
   
-  $style = 'main' unless $style;
-  $self->{ 'TAGS' }{ $style }{ $tag } = $value;
+  $mode = 'main' unless $mode;
+  $self->{ 'TAGS' }{ $mode }{ $tag } = $value;
 }
 
-sub style_copy
+sub define_var
 {
   my $self  = shift;
-  my $style = shift; # destination style
+  my $mode  = shift;
+  my $var   = shift;
+  my $value = shift;
   
-  for my $s ( @_ ) # for each source styles
+  $mode = 'main' unless $mode;
+  $self->{ 'VARS' }{ $mode }{ $var } = $value;
+}
+
+sub mode_copy
+{
+  my $self  = shift;
+  my $mode = shift; # destination mode
+  
+  for my $s ( @_ ) # for each source modes
     {
-    # print "DEBUG: style copy: [$style] <- [$s]\n";
+    # print "DEBUG: mode copy: [$mode] <- [$s]\n";
     while( my ( $k, $v ) = each %{ $self->{ 'TAGS' }{ $s } } )
       {
-      # print "DEBUG:             ($k) = ($v)\n";
-      $self->define_tag( $style, $k, $v );
+      # print "DEBUG:         TAG ($k) = ($v)\n";
+      $self->define_tag( $mode, $k, $v );
+      }
+    while( my ( $k, $v ) = each %{ $self->{ 'VARS' }{ $s } } )
+      {
+      # print "DEBUG:         VAR ($k) = ($v)\n";
+      $self->define_var( $mode, $k, $v );
       }
     }
 }
 
-sub style_load
+sub mode_load
 {
   my $self  = shift;
   my $file  = shift;
@@ -83,18 +100,19 @@ sub style_load
     {
     next if /^\s*[#;]/; # comments
     chomp;
-    if ( /^\s*STYLE/i )
+    if ( /^\s*MODE/i )
       {
       $_ = lc $_;
       s/\s+//g; # get rid of whitespace
       my @a = split /[:,]/;
-      shift @a; # skip `style' keyword
+      shift @a; # skip `mode' keyword
       $target = shift @a;
-      $self->style_copy( $target, @a );
+      $self->mode_copy( $target, @a );
       }
     else
       {
-      $self->define_tag( $target, lc $1, $2 ) if /^\s*(\S+)\s+(.*)$/;
+      $self->define_tag( $target, lc $1, $2 ) if /^\s*(<\S+)\s+(.*)$/;
+      $self->define_var( $target, lc $2, $3 ) if /^\s*(%(\S+))\s+(.*)$/;
       }
     }
   close $i;
@@ -124,7 +142,9 @@ sub var_expand
   $self->{ 'VISITED' } = {} if $level == 1;
   
   return undef if $self->{ 'VISITED' }{ "!VAR::$var" }++; # avoids recursion
-  my $value = $self->{ 'ENV' }{ $var } || $ENV{ $var };
+  my $mode = $self->{ 'MODE' }[0] || 'main';
+  my $value =    $self->{ 'VARS' }{ $mode }{ $var }
+              || $self->{ 'ENV' }{ $var };
   # use Data::Dumper; # DEBUG
   # print "DEBUG: var_expand: [$var] = ($value)".Dumper($self->{ 'ENV' })."\n";
   return $self->expand( $value, $level + 1 );
@@ -150,16 +170,16 @@ sub tag_expand
     # print "DEBUG:          [$k] = ($v)\n";
     }
   
-  if ( $tag_lc eq 'style' )
+  if ( $tag_lc eq 'mode' )
     {
-    unshift @{ $self->{ 'STYLE' } }, ( $args{ 'name' } || 'main' );
-    $self->{ 'ENV' }{ '!STYLE' } = $self->{ 'STYLE' }[0] || 'main';
+    unshift @{ $self->{ 'MODE' } }, ( $args{ 'name' } || 'main' );
+    $self->{ 'ENV' }{ '!MODE' } = $self->{ 'MODE' }[0] || 'main';
     return undef;    
     }
-  elsif ( $tag_lc eq '/style' )
+  elsif ( $tag_lc eq '/mode' )
     {
-    shift @{ $self->{ 'STYLE' } };
-    $self->{ 'ENV' }{ '!STYLE' } = $self->{ 'STYLE' }[0] || 'main';
+    shift @{ $self->{ 'MODE' } };
+    $self->{ 'ENV' }{ '!MODE' } = $self->{ 'MODE' }[0] || 'main';
     return undef;    
     }
   if ( $tag_lc eq 'var' )
@@ -208,13 +228,13 @@ sub tag_expand
     {
     $tag = "<$tag>";
     
-    my $style = $self->{ 'STYLE' }[0] || 'main';
-    my $value = $self->{ 'TAGS' }{ $style }{ $tag };
-    # print "DEBUG: style name {$style}, tag: $tag -> ($value)\n" if defined $value;
-    if ( $value and ! $self->{ 'VISITED' }{ "$style::$tag" } )
+    my $mode = $self->{ 'MODE' }[0] || 'main';
+    my $value = $self->{ 'TAGS' }{ $mode }{ $tag };
+    # print "DEBUG: mode name {$mode}, tag: $tag -> ($value)\n" if defined $value;
+    if ( $value and ! $self->{ 'VISITED' }{ "$mode::$tag" } )
       {
       # print "DEBUG:               ---> ($value)\n";
-      $self->{ 'VISITED' }{ "$style::$tag" }++; # avoids recursion
+      $self->{ 'VISITED' }{ "$mode::$tag" }++; # avoids recursion
       $value = $self->expand( $value, $level + 1 );
       $value =~ s/\%([a-z_0-9]+)/$args{ lc $1 }/gi;
       my $ret = $self->expand( $value, $level + 1 );
@@ -233,7 +253,7 @@ sub tag_expand
 
 =head1 NAME
 
-HTML::Expander - html tag expander with inheritable tag definitions (styles)
+HTML::Expander - html tag expander with inheritable tag definitions (modes)
 
 =head1 SYNOPSIS
 
@@ -242,15 +262,15 @@ HTML::Expander - html tag expander with inheritable tag definitions (styles)
   # get new HTML::Expander object;
   my $ex = new HTML::Expander;
   
-  # load style (tags) definitions
-  $ex->style_load( "/path/to/style.def.txt" );
+  # load mode (tags) definitions
+  $ex->mode_load( "/path/to/mode.def.txt" );
  
   # define some more tags
   $ex->define_tag( 'main', '<name>',  '<h1><font color=%c>' );
   $ex->define_tag( 'main', '</name>', '</font></h1>' );
   
-  # copy `main' into `new' style
-  $ex->style_copy( 'new', 'main' );
+  # copy `main' into `new' mode
+  $ex->mode_copy( 'new', 'main' );
   
   # define one more tag
   $ex->define_tag( 'new', '<h1>',  '<p><h1>' );
@@ -258,21 +278,21 @@ HTML::Expander - html tag expander with inheritable tag definitions (styles)
   $ex->define_tag( 'new', '</box>',  '</pre>' );
   
   # expand!
-  print $ex->expand( "<style name=new>
-                        (current style is '<var name=!STYLE>') 
+  print $ex->expand( "<mode name=new>
+                        (current mode is '<var name=!MODE>') 
                         <name c=#fff>This is me</name>
-                      </style>
-                        (cyrrent style is '<var name=!STYLE>') 
+                      </mode>
+                        (cyrrent mode is '<var name=!MODE>') 
                         <name>empty</name>
                       1.<var name=TEST>
                       2.<var name=TEST set=opala! echo>
                       3.<var name=TEST>
                       \n" );
   # the result will be:
-  #                     <pre>(current style is 'new')</pre>
+  #                     <pre>(current mode is 'new')</pre>
   #                     <p><h1><font color=#fff>This is me</font></h1>
   #                   
-  #                     <box>(cyrrent style is 'main')</box>
+  #                     <box>(cyrrent mode is 'main')</box>
   #                     <h1><font color=>empty</font></h1>
   #                   1.
   #                   2.opala!
@@ -295,33 +315,33 @@ HTML::Expander - html tag expander with inheritable tag definitions (styles)
 =head1 DESCRIPTION
 
 HTML::Expander replaces html tags with other text (more tags, so it 'expands':)) 
-with optional arguments. HTML::Expander uses tag tables which are called styles. 
-Styles can inherit other styles (several ones if needed). The goal is to have 
+with optional arguments. HTML::Expander uses tag tables which are called modes. 
+Modes can inherit other modes (several ones if needed). The goal is to have 
 as simple input html document as you need and have multiple different outputs. 
 For example you may want <box> tag to render either as <pre> or as 
-<table><tr><td> in two separated styles. 
+<table><tr><td> in two separated modes. 
 
 Essentially HTML::Expander works as preprocessor.
 
-The style file syntax is:
+The mode file syntax is:
 
   tag   tag-replacement-string
 
-  STYLE: style-name: inherited-styles-list
+  MODE: mode-name: inherited-modes-list
 
   tag   tag-replacement-string
 
   etc...
  
-inherited-styles-list is comma or semicolon-separated list of styles that
-should be copied (inherited) in this style
+inherited-modes-list is comma or semicolon-separated list of modes that
+should be copied (inherited) in this mode
  
-The style file example:
+The mode file example:
 
-  ### begin style
+  ### begin mode
 
-  # top-level style is called `main' and is silently defined by default
-  # style: main
+  # top-level mode is called `main' and is silently defined by default
+  # mode: main
 
   <head1>   <h1>
   </head1>  </h1>
@@ -329,11 +349,11 @@ The style file example:
   <head2>   <h1><font color=#ff0000>
   </head2>  </h1></font>
 
-  STYLE: page: main
+  MODE: page: main
 
   <head2>   <h1><font color=#00ff00>
 
-  STYLE: edit: page, main
+  MODE: edit: page, main
   
   # actually `page' inherits `main' so it is not really
   # required here to list `main'
@@ -366,14 +386,14 @@ You can have unary arguments (without value) which, if used, have '1' value.
 
 There are several tags with special purposes:
 
-  <style name=name>
+  <mode name=name>
   
-Sets current style to `name' (saves it on the top of the style stack).  
+Sets current mode to `name' (saves it on the top of the mode stack).  
 
-  </style>
+  </mode>
   
-Removes last used style from the stack (if stack is empty `main' is used).
-Both <style> and </style> are replaced with empty strings.
+Removes last used mode from the stack (if stack is empty `main' is used).
+Both <mode> and </mode> are replaced with empty strings.
 
   <exec cmd=command>
   
@@ -395,8 +415,8 @@ $ex->{'ENV'}{ 'var-name' } = 'var-value';
 i.e. $ex->{'ENV'} is hash reference to the local environment. There is no
 special access policy.
 
-There is syntax for variables interpolation. Values are taken either from
-internal environment table or program environment (internal has priority):
+There is syntax for variables interpolation. Values are taken from internal 
+environment table:
 
   (%VARNAME)
   
@@ -426,8 +446,8 @@ use this:
 =head1 BUGS
 
 Unknown tags are left as-is, this is not bug but if you write non-html tag
-which is not defined in style tables it will passed into the output text.
-(see <box> example above for 'main' style)
+which is not defined in mode tables it will passed into the output text.
+(see <box> example above for 'main' mode)
 
 If you find bug please contact me, thank you.
 
@@ -446,7 +466,7 @@ If you find bug please contact me, thank you.
  
 =head1 VERSION
 
-  $Id: Expander.pm,v 1.13 2004/09/21 21:14:45 cade Exp $
+  $Id: Expander.pm,v 1.16 2005/11/12 22:15:22 cade Exp $
  
 =cut
 

@@ -1,5 +1,13 @@
 Revision history for Perl extension HTML::Expander.
 
+2.4 Fri Nov 18 02:37:29 EET 2005
+
+    - removed 'STYLE' notion, keyword replaced with MODE to avoid
+      HTML's 'STYLE' tag. I admit it was awful if you use inline
+      styles :) sorry.
+   - %ENV is not used by default enymore. if you want old behaviour
+     merge %ENV inside Expander's internal environment.   
+
 2.3 Wed Sep 22 13:11:16 EEST 2004
 
     - fixed recursion stop logic
@@ -10,6 +18,7 @@ Revision history for Perl extension HTML::Expander.
     - fixed (%VAR) interpolation before %arg tag interpolation
 
 0.01  Sun Nov 11 03:46:59 2001
-	- original version; created by h2xs 1.21 with options
-		-X HTML::Expander
+    
+    - original version; created by h2xs 1.21 with options
+        -X HTML::Expander
 
