@@ -1,8 +1,11 @@
 use Test;
 BEGIN { plan tests => 1 };
 use HTML::Expander;
+use strict;
 
 my $ex = new HTML::Expander;
+
+$ex->{ 'WARNINGS' }++;
 
 $ex->define_tag( 'main', '<name>',  '<h1><font color=%c>' );
 $ex->define_tag( 'main', '</name>', '</font></h1>' );
@@ -21,9 +24,11 @@ print $ex->expand( "<mode name=new>
                     2.<var name=TEST set=opala! echo>
                     3.<var name=TEST>
                     \n" );
+$ex->{ 'EXEC_TAG_ALLOWED' } = 1;
 print $ex->expand( '<exec cmd=date>(%HOME)' ), "\n";
 
-$ex->{ 'INC' }{ '.' } = 1;
+$ex->add_inc_paths( '.' );
+
 print $ex->expand( '<inc file=test.pl>' ), "\n";
 
 print "done.";

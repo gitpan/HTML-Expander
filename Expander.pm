@@ -4,15 +4,15 @@
 # Vladi Belperchinov-Shabanski "Cade"
 # <cade@biscom.net> <cade@datamax.bg> <cade@cpan.org>
 # http://cade.datamax.bg
-# http://play.evrocom.net/cade
-# $Id: Expander.pm,v 1.16 2005/11/12 22:15:22 cade Exp $
+# 
+# $Id: Expander.pm,v 1.17 2005/11/18 00:42:52 cade Exp $
 #
 #########################################################################
 package HTML::Expander;
 use Exporter;
 @ISA     = qw( Exporter );
 
-our $VERSION  = '2.4';
+our $VERSION  = '2.6';
 
 use Carp;
 use strict;
@@ -66,6 +66,18 @@ sub define_var
   
   $mode = 'main' unless $mode;
   $self->{ 'VARS' }{ $mode }{ $var } = $value;
+}
+
+sub add_inc_paths
+{
+  my $self  = shift;
+  $self->{ 'INC' }{ $_ }++ for @_;
+}
+
+sub del_inc_paths
+{
+  my $self  = shift;
+  delete $self->{ 'INC' }{ $_ } for @_;
 }
 
 sub mode_copy
@@ -196,18 +208,24 @@ sub tag_expand
     }
   elsif ( $tag_lc eq 'include' or $tag_lc eq 'inc' )
     {
+    my $file_arg = $args{ 'file' };
+    if( $file_arg !~ /^[a-zA-Z0-9_\-]+(\.[a-zA-Z0-9_\-]*)?$/ )
+      {
+      $self->warn( "forbidden include file name  `$file_arg'" );
+      return undef 
+      }
     my $file;
     for( keys %{ $self->{ 'INC' } } )
       {
-      $file = $_ . '/' . $args{ 'file' };
+      $file = $_ . '/' . $file_arg;
       last if -e $file;
       $file = undef;
       }
     return undef if $self->{ 'VISITED' }{ "!INC::$file" }++; # avoids recursion
     open( my $i, $file ) || do
       {
-      carp __PACKAGE__ . ": cannot open file `$file'" 
-          if $self->{ WARNINGS };
+      $self->warn( "cannot open file `$file'" );
+      return undef;
       };
     my $data = $self->expand( join( '', <$i> ), $level + 1 );
     close( $i );
@@ -215,10 +233,17 @@ sub tag_expand
     }
   elsif ( $tag_lc eq 'exec' )
     {
-    open( my $i, $args{ 'cmd' } . '|' ) || do 
+    my $cmd = $args{ 'cmd' };
+    if( ! $self->{ 'EXEC_TAG_ALLOWED' } )
+      {
+      $self->warn( "exec is forbidden `$cmd'" );
+      return undef;
+      }
+    
+    open( my $i, $cmd . '|' ) || do 
       { 
-      carp __PACKAGE__ . ": cannot exec file `" . $args{ 'cmd' } . "'" 
-          if $self->{ WARNINGS };
+      $self->warn( "exec failed `$cmd'" );
+      return undef;
       };
     my $data = $self->expand( join( '', <$i> ), $level + 1 );
     close $i;
@@ -247,6 +272,14 @@ sub tag_expand
       return "<$tag_org>";
       }
     }  
+}
+
+sub warn
+{
+  my $self = shift;
+  return unless $self->{ 'WARNINGS' } || $self->{ 'WARN' };
+
+  carp __PACKAGE__ . ": " . join( ' ', @_ );
 }
 
 =pod
@@ -299,9 +332,13 @@ HTML::Expander - html tag expander with inheritable tag definitions (modes)
   #                   3.opala!
   
   # this should print current date
+  $self->{ 'EXEC_TAG_ALLOWED' } = 1; # allow execution of programs
   print $ex->expand( '<exec cmd=date>' ), "\n";
+  $self->{ 'EXEC_TAG_ALLOWED' } = 0; # forbid execution of programs (default)
   
   # add include paths
+  $ex->add_inc_paths( '/usr/html/inc', '/opt/test' );
+  $ex->del_inc_paths( '.' );
   $ex->{ 'INC' }{ '.' } = 1;
   $ex->{ 'INC' }{ '/usr/html/inc' } = 1;
   $ex->{ 'INC' }{ '/opt/test' } = 1;
@@ -397,7 +434,21 @@ Both <mode> and </mode> are replaced with empty strings.
 
   <exec cmd=command>
   
-This tag is replaced with `command's output.
+This tag is replaced with `command's output. 'exec' is forbidden by default.
+Using it will lead to empty string returned. To allow it you need to:
+
+  $ex->{ 'EXEC_TAG_ALLOWED' } = 1; # allow execution of programs
+
+($ex is the HTML::Expander object you want to allow execution)
+exec must be used only if you produce html pages from static source, i.e. NOT
+from end-user source like html forms etc.! To avoid unwanted execution the
+program which uses HTML::Expander must encode all <>'s into html special
+chars:
+
+  >   must be converted to   &gt;
+  <   must be converted to   &lt;
+  
+Rule of thumb is: do not use exec! :)
 
   <include file=incfile>
   or
@@ -451,6 +502,14 @@ which is not defined in mode tables it will passed into the output text.
 
 If you find bug please contact me, thank you.
 
+=head1 DIAGNOSTICS
+
+HTML::Expander can report warnings if something wrong is going on. This is
+assumed to be debugging or diagnostic tool so it is disabled by default.
+To enable warnings:
+
+  $ex->{ 'WARNINGS' } = 1;
+
 =head1 TODO
 
   <empty>
@@ -462,11 +521,10 @@ If you find bug please contact me, thank you.
   <cade@biscom.net> <cade@datamax.bg> <cade@cpan.org>
 
   http://cade.datamax.bg
-  http://play.evrocom.net/cade
  
 =head1 VERSION
 
-  $Id: Expander.pm,v 1.16 2005/11/12 22:15:22 cade Exp $
+  $Id: Expander.pm,v 1.17 2005/11/18 00:42:52 cade Exp $
  
 =cut
 
