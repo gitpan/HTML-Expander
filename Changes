@@ -1,5 +1,11 @@
 Revision history for Perl extension HTML::Expander.
 
+2.7 Fri Jan 25 02:24:24 EET 2013
+
+    - fixed broken visited tags/vars logic, pretty stupid :)
+    - renamed internal function names to follow expand_* scheme.
+    - define_var() now accepts multiple (hash) entries.
+
 2.6 Sun Apr 30 00:47:58 EEST 2006
 
     - exec tag is now forbidden by default
@@ -9,8 +15,7 @@ Revision history for Perl extension HTML::Expander.
 2.4 Fri Nov 18 02:37:29 EET 2005
 
     - removed 'STYLE' notion, keyword replaced with MODE to avoid
-      HTML's 'STYLE' tag. I admit it was awful if you use inline
-      styles :) sorry.
+      HTML's 'STYLE' tag.
     - %ENV is not used by default anymore. if you want old behaviour
       merge %ENV inside Expander's internal environment.   
 
